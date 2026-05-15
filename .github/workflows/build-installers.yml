@@ -34,7 +34,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pyinstaller customtkinter pillow requests python-dotenv mcp keyring httpx PyJWT
+          python -m pip install pyinstaller customtkinter CTkToolTip pillow requests python-dotenv mcp keyring httpx PyJWT
 
       - name: Download python-build-standalone (arm64)
         run: |
@@ -102,7 +102,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pyinstaller customtkinter pillow requests python-dotenv mcp keyring httpx PyJWT
+          python -m pip install pyinstaller customtkinter CTkToolTip pillow requests python-dotenv mcp keyring httpx PyJWT
 
       - name: Download python-build-standalone
         shell: pwsh
