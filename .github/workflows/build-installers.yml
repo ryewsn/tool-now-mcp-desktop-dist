@@ -264,3 +264,4 @@ jobs:
           path: installeruild\windows\dist\ServiceNow-MCP-Setup-Windows-${{ steps.version.outputs.app_version }}.exe
           if-no-files-found: error
           retention-days: 3
+
