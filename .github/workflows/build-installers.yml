@@ -42,14 +42,6 @@ jobs:
           curl -L -o /tmp/python-dist-arm64.tar.gz \
             "${PBS_BASE}/cpython-${PBS_VERSION}+${PBS_DATE}-aarch64-apple-darwin-install_only.tar.gz"
 
-      - name: Build arm64 app
-        run: |
-          cp /tmp/python-dist-arm64.tar.gz installer/build/mac/python-dist.tar.gz
-          pyinstaller installer/build/mac/installer.spec \
-            --distpath installer/build/mac/dist-arm64 \
-            --workpath installer/build/mac/build_work \
-            --noconfirm
-
       - name: Import signing certificate
         env:
           APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
@@ -63,11 +55,38 @@ jobs:
           security unlock-keychain -p "" build.keychain
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
+      - name: Sign Python distribution binaries
+        run: |
+          mkdir -p /tmp/python-dist-sign
+          tar -xzf /tmp/python-dist-arm64.tar.gz -C /tmp/python-dist-sign
+
+          find /tmp/python-dist-sign -type f | while read f; do
+            if file "$f" | grep -qE "Mach-O (64-bit )?(executable|dynamically linked shared library|bundle)"; then
+              codesign --force \
+                --sign "Developer ID Application: RAFAEL LOUIS YEW (W96JGG6R96)" \
+                --options runtime \
+                --timestamp \
+                "$f" || true
+            fi
+          done
+
+          cd /tmp/python-dist-sign
+          tar -czf /tmp/python-dist-arm64.tar.gz .
+
+      - name: Build arm64 app
+        run: |
+          cp /tmp/python-dist-arm64.tar.gz installer/build/mac/python-dist.tar.gz
+          pyinstaller installer/build/mac/installer.spec \
+            --distpath installer/build/mac/dist-arm64 \
+            --workpath installer/build/mac/build_work \
+            --noconfirm
+
       - name: Sign .app
         run: |
           codesign --deep --force --verify --verbose \
             --sign "Developer ID Application: RAFAEL LOUIS YEW (W96JGG6R96)" \
             --options runtime \
+            --timestamp \
             "installer/build/mac/dist-arm64/ServiceNow MCP Setup.app"
 
       - name: Get app version
@@ -99,6 +118,7 @@ jobs:
           DMG_NAME="ServiceNow-MCP-Setup-macOS-${{ steps.version.outputs.app_version }}.dmg"
           codesign --force --verify --verbose \
             --sign "Developer ID Application: RAFAEL LOUIS YEW (W96JGG6R96)" \
+            --timestamp \
             "installer/build/mac/dist-arm64/${DMG_NAME}"
 
       - name: Notarize and staple DMG
