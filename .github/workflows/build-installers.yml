@@ -1,7 +1,8 @@
 # .github/workflows/build-installers.yml
-# Builds installers by checking out the private source repo.
-# Runs on personal account quota (ryewsn) rather than the org account.
-# Requires secret: MAIN_REPO_PAT — a PAT with read access to Now-AI-Foundry/tool-now-mcp-desktop.
+# Builds discrete per-platform installers: macOS arm64 (.dmg) and Windows (.exe).
+# macOS arm64 runs on macos-14 (native Apple Silicon).
+# Installers are distributed via SharePoint, not GitHub Releases.
+# Artifact upload is best-effort — builds succeed even if GitHub storage quota is hit.
 name: Build Installers
 
 on:
@@ -24,11 +25,8 @@ jobs:
       PBS_DATE: "20260303"
 
     steps:
-      - name: Checkout source
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          repository: Now-AI-Foundry/tool-now-mcp-desktop
-          token: ${{ secrets.MAIN_REPO_PAT }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -46,6 +44,13 @@ jobs:
           PBS_BASE="https://github.com/indygreg/python-build-standalone/releases/download/${PBS_DATE}"
           curl -L -o /tmp/python-dist-arm64.tar.gz \
             "${PBS_BASE}/cpython-${PBS_VERSION}+${PBS_DATE}-aarch64-apple-darwin-install_only.tar.gz"
+
+      - name: Download Node.js 22.x arm64
+        run: |
+          NODE_VERSION="22.16.0"
+          curl -L -o installer/build/mac/node-dist.tar.gz \
+            "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-arm64.tar.gz"
+          cp package.json installer/build/mac/package.json
 
       - name: Import signing certificate
         if: inputs.sign
@@ -186,11 +191,8 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          repository: Now-AI-Foundry/tool-now-mcp-desktop
-          token: ${{ secrets.MAIN_REPO_PAT }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -209,6 +211,14 @@ jobs:
           $TarballUrl = "https://github.com/indygreg/python-build-standalone/releases/download/20260303/cpython-3.12.13+20260303-x86_64-pc-windows-msvc-install_only.tar.gz"
           Invoke-WebRequest -Uri $TarballUrl -OutFile "installer\build\windows\python-dist.tar.gz"
 
+      - name: Download Node.js 22.x x64
+        shell: pwsh
+        run: |
+          $NodeVersion = "22.16.0"
+          Invoke-WebRequest -Uri "https://nodejs.org/dist/v${NodeVersion}/node-v${NodeVersion}-win-x64.zip" `
+            -OutFile "installer\build\windows\node-dist.zip"
+          Copy-Item "package.json" "installer\build\windows\package.json"
+
       - name: Run PyInstaller
         run: |
           pyinstaller installer\build\windows\installer.spec --distpath installer\build\windows\dist --workpath installer\build\windows\build_work --noconfirm
@@ -216,6 +226,13 @@ jobs:
       - name: Smoke test — run PyInstaller bundle headlessly
         shell: pwsh
         run: |
+          # Run the actual PyInstaller-built executable with --smoke-test flag.
+          # This tests the EXACT codepath users hit, including PyInstaller's
+          # env vars, _MEIPASS, bundled tarball, and _clean_python_env().
+          # Steps tested: create dir, extract Python, create venv, pip install.
+          #
+          # The exe is a GUI app (console=False), so we use Start-Process -Wait
+          # to capture the exit code, and results are written to a file.
           $Exe = Resolve-Path "installer\build\windows\dist\ServiceNow MCP Setup\ServiceNow MCP Setup.exe"
           $ResultFile = "$env:TEMP\snmcp-smoke-result.txt"
           Remove-Item -Path $ResultFile -ErrorAction SilentlyContinue
@@ -232,6 +249,7 @@ jobs:
           }
 
           if ($proc.ExitCode -ne 0) {
+            # Show the installer log for debugging
             $LogFile = "$env:LOCALAPPDATA\ServiceNow MCP\ServiceNow-MCP-Setup.log"
             if (Test-Path $LogFile) {
               Write-Host "::group::Installer log"
