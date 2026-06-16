@@ -150,7 +150,7 @@ jobs:
           done
 
           cd /tmp/node-dist-sign
-          tar -czf installer/build/mac/node-dist.tar.gz .
+          tar -czf "$GITHUB_WORKSPACE/installer/build/mac/node-dist.tar.gz" .
 
       - name: Build arm64 app
         run: |
