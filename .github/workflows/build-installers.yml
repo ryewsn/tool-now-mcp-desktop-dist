@@ -110,6 +110,48 @@ jobs:
           cd /tmp/python-dist-sign
           tar -czf /tmp/python-dist-arm64.tar.gz .
 
+      - name: Sign Node.js distribution binaries
+        if: inputs.sign
+        run: |
+          mkdir -p /tmp/node-dist-sign
+          tar -xzf installer/build/mac/node-dist.tar.gz -C /tmp/node-dist-sign
+
+          # Node.js needs allow-jit for V8 and disable-library-validation for native addons
+          cat > /tmp/node-entitlements.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>com.apple.security.cs.allow-jit</key>
+              <true/>
+              <key>com.apple.security.cs.disable-library-validation</key>
+              <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          find /tmp/node-dist-sign -type f | while read f; do
+            if file "$f" | grep -qE "Mach-O (64-bit )?(executable|dynamically linked shared library|bundle)"; then
+              if file "$f" | grep -q "executable"; then
+                codesign --force \
+                  --sign "Developer ID Application: RAFAEL LOUIS YEW (W96JGG6R96)" \
+                  --options runtime \
+                  --timestamp \
+                  --entitlements /tmp/node-entitlements.plist \
+                  "$f" || true
+              else
+                codesign --force \
+                  --sign "Developer ID Application: RAFAEL LOUIS YEW (W96JGG6R96)" \
+                  --options runtime \
+                  --timestamp \
+                  "$f" || true
+              fi
+            fi
+          done
+
+          cd /tmp/node-dist-sign
+          tar -czf installer/build/mac/node-dist.tar.gz .
+
       - name: Build arm64 app
         run: |
           cp /tmp/python-dist-arm64.tar.gz installer/build/mac/python-dist.tar.gz
