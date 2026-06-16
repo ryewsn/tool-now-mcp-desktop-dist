@@ -11,6 +11,10 @@ on:
         description: 'Sign and notarize the macOS DMG (required for distribution)'
         type: boolean
         default: false
+      version:
+        description: 'Version string (YYYY.MM.DD.XX) — overrides pyproject.toml when set'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -172,7 +176,11 @@ jobs:
       - name: Get app version
         id: version
         run: |
-          APP_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ -n "${{ inputs.version }}" ]; then
+            APP_VERSION="${{ inputs.version }}"
+          else
+            APP_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          fi
           echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
 
       - name: Install create-dmg
@@ -307,7 +315,12 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $AppVersion = (Select-String -Path "pyproject.toml" -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          $InputVersion = "${{ inputs.version }}"
+          if ($InputVersion) {
+            $AppVersion = $InputVersion
+          } else {
+            $AppVersion = (Select-String -Path "pyproject.toml" -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          }
           echo "app_version=$AppVersion" >> $env:GITHUB_OUTPUT
 
       - name: Run Inno Setup
